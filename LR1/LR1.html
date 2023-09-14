@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script async src="https://docs.opencv.org/master/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
+</head>
+<body>
+    <!-- кноипки работы с изображением -->
+    <button id="grayButton">Преобразовать в оттенки серого</button>
+    <button id="binaryButton">Бинаризация</button>
+    <button id="adaptiveBinaryButton">Адаптивная бинаризация</button>
+    <button id="equalizeButton">Выровнять гистограмму</button>
+    <button id="saveButton">Сохранить изображение</button><br><br>
+
+    <!-- загрузка изображения -->
+    <input type="file" id="fileInput" accept="image/*"><br><br>
+
+    <!-- отображение исходного изображения и результата обработки -->
+    <img id="inputImage" style="max-width: 500px;">
+    <canvas id="outputCanvas" style="max-width: 500px;"></canvas>
+
+    <script>
+        let srcMat, dstMat;
+        let inputImageElement = document.getElementById('inputImage');
+        let outputCanvas = document.getElementById('outputCanvas');
+        let grayButton = document.getElementById('grayButton');
+        let binaryButton = document.getElementById('binaryButton');
+        let adaptiveBinaryButton = document.getElementById('adaptiveBinaryButton');
+        let equalizeButton = document.getElementById('equalizeButton');
+        let saveButton = document.getElementById('saveButton');
+
+        function onOpenCvReady() {
+            // вызов функции по готовности библиотеки
+            cv.onRuntimeInitialized = function() {
+                // добавление обработчика события выбора файла
+                document.getElementById('fileInput').addEventListener('change', function (e) {
+                    const file = e.target.files[0];
+                    const reader = new FileReader();
+
+                    reader.onload = function () {
+                        const img = new Image();
+                        img.onload = function () {
+                            // отображение выбранного изображения
+                            inputImageElement.src = img.src;
+                            // создание матрицы изображения для обработки
+                            srcMat = cv.imread(inputImageElement);
+                            dstMat = new cv.Mat();
+                        };
+                        img.src = reader.result;
+                    };
+                    reader.readAsDataURL(file);
+                });
+
+                // преобразование изображения в оттенки серого
+                grayButton.addEventListener('click', function () {
+                    if (srcMat) {
+                        cv.cvtColor(srcMat, dstMat, cv.COLOR_RGBA2GRAY);
+                        cv.imshow(outputCanvas, dstMat);
+                    }
+                });
+
+                // бинаризация изображения
+                binaryButton.addEventListener('click', function () {
+                    if (srcMat) {
+                        cv.cvtColor(srcMat, dstMat, cv.COLOR_RGBA2GRAY);
+                        // бинаризация
+                        cv.threshold(dstMat, dstMat, 128, 255, cv.THRESH_BINARY);
+                        cv.imshow(outputCanvas, dstMat); 
+                    }
+                });
+
+                // адаптивная бинаризация изображения
+                adaptiveBinaryButton.addEventListener('click', function () {
+                    if (srcMat) {
+                        cv.cvtColor(srcMat, dstMat, cv.COLOR_RGBA2GRAY);
+                        cv.adaptiveThreshold(dstMat, dstMat, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2);
+                        cv.imshow(outputCanvas, dstMat);
+                    }
+                });
+
+                // выравнивание гистограммы изображения
+                equalizeButton.addEventListener('click', function () {
+                    if (srcMat) {
+                        cv.cvtColor(srcMat, dstMat, cv.COLOR_RGBA2GRAY);
+                        // выравнивание гистограммы
+                        cv.equalizeHist(dstMat, dstMat);
+                        cv.imshow(outputCanvas, dstMat);
+                    }
+                });
+
+                // обработчик события для кнопки сохранения изображения
+                saveButton.addEventListener('click', function () {
+                    if (dstMat) {
+                        // проверка, что canvas имеет одни размеры с dstMat
+                        const canvas = document.createElement('canvas');
+                        canvas.width = dstMat.cols;
+                        canvas.height = dstMat.rows;
+                        const ctx = canvas.getContext('2d');
+                        
+                        // рисуем изображение на canvas
+                        cv.imshow(canvas, dstMat);
+
+                        // получаем ImageData из canvas
+                        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                        // конвертируем canvas в data URL и инициируем скачивание
+                        canvas.toBlob(function (blob) {
+                            const a = document.createElement('a');
+                            document.body.appendChild(a);
+                            a.style = 'display: none';
+                            const url = window.URL.createObjectURL(blob);
+                            a.href = url;
+                            a.download = 'lr1_output.jpg'; 
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                        });
+                    }
+                });
+
+            };
+        }
+    </script>
+</body>
+</html>
