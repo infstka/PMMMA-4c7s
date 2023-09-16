@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script async src="https://docs.opencv.org/master/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
+</head>
+<body>
+    <!-- кноипки работы с изображением -->
+    <button id="saveButton">Сохранить изображение</button>
+    <button id="customFilterButton">Светрка</button>
+    <button id="blurButton">Сглаживание (Blur)</button>
+    <button id="gaussianBlurButton">Сглаживание (GaussianBlur)</button>
+    <button id="medianBlurButton">Сглаживание (MedianBlur)</button>
+    <button id="erosionButton">Эрозия</button>
+    <button id="dilationButton">Дилатация</button><br><br>
+
+    <!-- загрузка изображения -->
+    <input type="file" id="fileInput" accept="image/*"><br><br>
+
+    <!-- отображение исходного изображения и результата обработки -->
+    <img id="inputImage" style="max-width: 500px;">
+    <canvas id="outputCanvas" style="max-width: 500px;"></canvas>
+
+    <script>
+        let srcMat, dstMat;
+        let inputImageElement = document.getElementById('inputImage');
+        let outputCanvas = document.getElementById('outputCanvas');
+        let saveButton = document.getElementById('saveButton');
+        let customFilterButton = document.getElementById('customFilterButton');
+        let blurButton = document.getElementById('blurButton');
+        let gaussianBlurButton = document.getElementById('gaussianBlurButton');
+        let medianBlurButton = document.getElementById('medianBlurButton');
+        let erosionButton = document.getElementById('erosionButton');
+        let dilationButton = document.getElementById('dilationButton');
+
+        function onOpenCvReady() {
+            // Вызов функции по готовности библиотеки
+            cv.onRuntimeInitialized = function() {
+                // Добавление обработчика события выбора файла
+                document.getElementById('fileInput').addEventListener('change', function (e) {
+                    const file = e.target.files[0];
+                    const reader = new FileReader();
+
+                    reader.onload = function () {
+                        const img = new Image();
+                        img.onload = function () {
+                            // Отображение выбранного изображения
+                            inputImageElement.src = img.src;
+                            // Создание матрицы изображения для обработки
+                            srcMat = cv.imread(inputImageElement);
+                            dstMat = new cv.Mat();
+                        };
+                        img.src = reader.result;
+                    };
+                    reader.readAsDataURL(file);
+                });
+
+                // Обработчик события для кнопки сохранения изображения
+                saveButton.addEventListener('click', function () {
+                    if (dstMat) {
+                        // Проверка, что canvas имеет одни размеры с dstMat
+                        const canvas = document.createElement('canvas');
+                        canvas.width = dstMat.cols;
+                        canvas.height = dstMat.rows;
+                        const ctx = canvas.getContext('2d');
+                        
+                        // Рисуем изображение на canvas
+                        cv.imshow(canvas, dstMat);
+
+                        // Получаем ImageData из canvas
+                        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                        // Конвертируем canvas в data URL и инициируем скачивание
+                        canvas.toBlob(function (blob) {
+                            const a = document.createElement('a');
+                            document.body.appendChild(a);
+                            a.style = 'display: none';
+                            const url = window.URL.createObjectURL(blob);
+                            a.href = url;
+                            a.download = 'lr1_output.jpg'; 
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                        });
+                    }
+                });
+
+                // свертка 
+                customFilterButton.addEventListener('click', function () {
+                    if (srcMat) {
+                        // создание ядра для пользовательского фильтра (фильтр усиления резкости)
+                        let kernel = new cv.Mat(3, 3, cv.CV_32FC1);
+                        kernel.data32F.set([-1, -1, -1,
+                                            -1, 9, -1,
+                                            -1, -1, -1]); // коэффициенты для усиления резкости
+
+                        // применение свертки
+                        cv.filter2D(srcMat, dstMat, -1, kernel);
+                        cv.imshow(outputCanvas, dstMat);
+                        kernel.delete();
+                    }
+                });
+
+                // сглаживание (Blur)
+                blurButton.addEventListener('click', function () {
+                    if (srcMat) {
+                        cv.blur(srcMat, dstMat, new cv.Size(3, 3));
+                        cv.imshow(outputCanvas, dstMat);
+                    }
+                });
+
+                // сглаживание (GaussianBlur)
+                gaussianBlurButton.addEventListener('click', function () {
+                    if (srcMat) {
+                        cv.GaussianBlur(srcMat, dstMat, new cv.Size(3, 3), 0, 0, cv.BORDER_DEFAULT);
+                        cv.imshow(outputCanvas, dstMat);
+                    }
+                });
+
+                // сглаживание (MedianBlur)
+                medianBlurButton.addEventListener('click', function () {
+                    if (srcMat) {
+                        cv.medianBlur(srcMat, dstMat, 3);
+                        cv.imshow(outputCanvas, dstMat);
+                    }
+                });
+
+                // эрозия - увеличение темных областей
+                erosionButton.addEventListener('click', function () {
+                    if (srcMat) {
+                        cv.cvtColor(srcMat, dstMat, cv.COLOR_RGBA2GRAY);
+                        let kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
+                        cv.erode(dstMat, dstMat, kernel);
+                        cv.imshow(outputCanvas, dstMat);
+                        kernel.delete(); 
+                    }
+                });
+
+                // дилатация - увеличение светлых областей
+                dilationButton.addEventListener('click', function () {
+                    if (srcMat) {
+                        cv.cvtColor(srcMat, dstMat, cv.COLOR_RGBA2GRAY);
+                        let kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
+                        cv.dilate(dstMat, dstMat, kernel);
+                        cv.imshow(outputCanvas, dstMat);
+                        kernel.delete(); 
+                    }
+                });
+            };
+        }
+    </script>
+</body>
+</html>
