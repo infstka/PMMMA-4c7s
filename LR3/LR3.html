@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script async src="https://docs.opencv.org/master/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
+</head>
+<body>
+    <!-- кнопки управления -->
+    <button id="startVideoButton">Старт видео</button>
+    <button id="stopVideoButton">Стоп видео</button>
+    <button id="applySobelButton">Применить оператор Собеля</button>
+    <button id="applyLaplacianButton">Применить оператор Лапласа</button>
+    <button id="applyCannyButton">Применить детектор границ Кэнни</button><br><br>
+
+    <!-- отображение видео и результата обработки -->
+    <video id="video" width="640" height="480" autoplay></video>
+    <canvas id="outputCanvas" width="640" height="480"></canvas>
+
+    <script>
+        let videoElement = document.getElementById('video');
+        let outputCanvas = document.getElementById('outputCanvas');
+        let startVideoButton = document.getElementById('startVideoButton');
+        let stopVideoButton = document.getElementById('stopVideoButton');
+        let applySobelButton = document.getElementById('applySobelButton');
+        let applyLaplacianButton = document.getElementById('applyLaplacianButton');
+        let applyCannyButton = document.getElementById('applyCannyButton');
+        let videoStream;
+        let videoCapture;
+        let isProcessing = false;
+
+        // функция, вызываемая при готовности OpenCV.js
+        function onOpenCvReady() {
+            cv.onRuntimeInitialized = function() {
+                startVideoButton.addEventListener('click', function () {
+                    startVideo();
+                });
+
+                stopVideoButton.addEventListener('click', function () {
+                    stopVideo();
+                });
+
+                applySobelButton.addEventListener('click', function () {
+                    if (!isProcessing) {
+                        applyOperator("Sobel");
+                    }
+                });
+
+                applyLaplacianButton.addEventListener('click', function () {
+                    if (!isProcessing) {
+                        applyOperator("Laplacian");
+                    }
+                });
+
+                applyCannyButton.addEventListener('click', function () {
+                    if (!isProcessing) {
+                        applyOperator("Canny");
+                    }
+                });
+            };
+        }
+
+        // функция для начала видеозахвата
+        function startVideo() {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ video: true })
+                    .then(function(stream) {
+                        videoElement.srcObject = stream;
+                        videoStream = stream;
+                        videoCapture = new cv.VideoCapture(videoElement);
+                    })
+                    .catch(function(error) {
+                        console.error('Error accessing the camera:', error);
+                    });
+            }
+        }
+
+        // функция для остановки видеозахвата
+        function stopVideo() {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => {
+                    track.stop();
+                });
+            }
+        }
+
+        // функция для применения выбранного оператора кадра
+        function applyOperator(operatorName) {
+            if (videoCapture) {
+                isProcessing = true;
+                let frame = new cv.Mat(videoElement.height, videoElement.width, cv.CV_8UC4);
+                videoCapture.read(frame);
+
+                // преобразование кадра в оттенки серого
+                let grayFrame = new cv.Mat();
+                cv.cvtColor(frame, grayFrame, cv.COLOR_RGBA2GRAY);
+
+                // применение выбранного оператора
+                let resultFrame = new cv.Mat();
+                if (operatorName === "Sobel") {
+                    // оператор Собеля
+                    // основан на вычислении градиента яркости пикселей, используя ядра свертки для выделения вертикальных и горизонтальных изменений интенсивности
+                    let sobelX = new cv.Mat();
+                    let sobelY = new cv.Mat();
+                    let sobelOutput = new cv.Mat();
+                    cv.Sobel(grayFrame, sobelX, cv.CV_32F, 1, 0);
+                    cv.Sobel(grayFrame, sobelY, cv.CV_32F, 0, 1);
+                    cv.magnitude(sobelX, sobelY, sobelOutput);
+                    resultFrame = sobelOutput;
+                } else if (operatorName === "Laplacian") {
+                    // оператор Лапласа 
+                    // находит границы путем вычисления вторых производных яркости пикселей и поиск нулевых пересечений
+                    cv.Laplacian(grayFrame, resultFrame, cv.CV_32F);
+                } else if (operatorName === "Canny") {
+                    // детектор границ Кэнни
+                    let edges = new cv.Mat();
+                    cv.Canny(grayFrame, edges, 50, 150);
+                    resultFrame = edges;
+                }
+
+                // отображение результата на холсте
+                cv.imshow(outputCanvas, resultFrame);
+
+                // освобождение памяти
+                frame.delete();
+                grayFrame.delete();
+                resultFrame.delete();
+
+                isProcessing = false;
+
+                // продолжаем обработку, если необходимо
+                if (!isProcessing) {
+                    requestAnimationFrame(function () {
+                        applyOperator(operatorName);
+                    });
+                }
+            }
+        }
+    </script>
+</body>
+</html>

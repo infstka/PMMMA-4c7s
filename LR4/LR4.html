@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script async src="https://docs.opencv.org/master/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
+</head>
+<body>
+    <!-- кноипки работы с изображением -->
+    <button id="findContoursButton">Найти контуры</button>
+    <button id="drawRectanglesButton">Рисовать прямоугольники</button>
+    <button id="findLargestContoursButton">Выделить наибольшие контуры</button>
+    <button id="countQuadrilateralsButton">Подсчитать четырехугольные фигуры</button>
+    <button id="circlesButton">Обнаружить окружности</button>
+    <button id="detectLinesButton">Найти линии</button><br><br>
+
+    <!-- загрузка изображения -->
+    <input type="file" id="fileInput" accept="image/*"><br><br>
+
+    <!-- отображение исходного изображения и результата обработки -->
+    <img id="inputImage" style="max-width: 500px;">
+    <canvas id="outputCanvas" style="max-width: 500px;"></canvas>
+
+    <!-- Блок для вывода количества предметов, четырехугольных фигур и окружностей -->
+    <div id="itemCount">Количество предметов: </div>
+    <div id="quadrilateralsCount">Количество четырехугольных фигур: </div>
+    <div id="circlesCount">Количество окружностей: </div>
+    <div id="linesCount">Количество линий: </div>
+
+    <script>
+        let srcMat, dstMat;
+        let inputImageElement = document.getElementById('inputImage');
+        let outputCanvas = document.getElementById('outputCanvas');
+        let findContoursButton = document.getElementById('findContoursButton');
+        let drawRectanglesButton = document.getElementById('drawRectanglesButton');
+        let findLargestContoursButton = document.getElementById('findLargestContoursButton');
+        let itemCountElement = document.getElementById('itemCount');
+        let quadrilateralsCountElement = document.getElementById('quadrilateralsCount');
+        let circlesCountElement = document.getElementById('circlesCount');
+        let linesCountElement = document.getElementById('linesCount');
+
+        function onOpenCvReady() {
+            // Вызов функции по готовности библиотеки
+            cv.onRuntimeInitialized = function() {
+                // Добавление обработчика события выбора файла
+                document.getElementById('fileInput').addEventListener('change', function (e) {
+                    const file = e.target.files[0];
+                    const reader = new FileReader();
+
+                    reader.onload = function () {
+                        const img = new Image();
+                        img.onload = function () {
+                            // Отображение выбранного изображения
+                            inputImageElement.src = img.src;
+                            // Создание матрицы изображения для обработки
+                            srcMat = cv.imread(inputImageElement);
+                            dstMat = new cv.Mat();
+                        };
+                        img.src = reader.result;
+                    };
+                    reader.readAsDataURL(file);
+                });
+
+                // Обработчик события для кнопки поиска контуров
+                findContoursButton.addEventListener('click', function () {
+                    if (srcMat) {
+                        // Создайте копию матрицы srcMat для обработки
+                        let contoursMat = srcMat.clone();
+
+                        // Преобразование изображения в оттенки серого
+                        cv.cvtColor(contoursMat, contoursMat, cv.COLOR_RGBA2GRAY);
+
+                        // Применение алгоритма Canny для выделения граней
+                        cv.Canny(contoursMat, contoursMat, 50, 150, 3);
+
+                        // Поиск контуров
+                        let contours = new cv.MatVector();
+                        let hierarchy = new cv.Mat();
+                        // Только внешние контуры   
+                        cv.findContours(contoursMat, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+                        // Рисование контуров на исходном изображении
+                        for (let i = 0; i < contours.size(); i++) {
+                            let color = new cv.Scalar(0, 255, 0, 255); // Зеленый цвет
+                            cv.drawContours(srcMat, contours, i, color, 2, cv.LINE_8, hierarchy, 0);
+                        }
+
+                        // Вывод количества предметов
+                        itemCountElement.textContent = "Количество предметов: " + contours.size();
+
+                        cv.imshow(outputCanvas, srcMat);
+
+                        // Освободите ресурсы
+                        contoursMat.delete();
+                        contours.delete();
+                        hierarchy.delete();
+                    }
+                });
+
+                // Обработчик события для кнопки рисования прямоугольников
+                drawRectanglesButton.addEventListener('click', function () {
+                    if (srcMat) {
+                        let contoursMat = srcMat.clone();
+                        cv.cvtColor(contoursMat, contoursMat, cv.COLOR_RGBA2GRAY);
+                        cv.Canny(contoursMat, contoursMat, 50, 150, 3);
+
+                        let contours = new cv.MatVector();
+                        let hierarchy = new cv.Mat();
+                        cv.findContours(contoursMat, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+                        // Рисование прямоугольников вокруг объектов
+                        for (let i = 0; i < contours.size(); i++) {
+                            let rect = cv.boundingRect(contours.get(i));
+                            let color = new cv.Scalar(255, 0, 0, 255); // Красный цвет
+
+                            let rectX = rect.x;
+                            let rectY = rect.y;
+                            let rectWidth = rect.width;
+                            let rectHeight = rect.height;
+
+                            cv.rectangle(srcMat, {x: rectX, y: rectY}, {x: rectX + rectWidth, y: rectY + rectHeight}, color, 2, cv.LINE_8, 0);
+                        }
+
+                        // Вывод количества предметов
+                        itemCountElement.textContent = "Количество предметов: " + contours.size();
+
+                        cv.imshow(outputCanvas, srcMat);
+
+                        // Освободите ресурсы
+                        contoursMat.delete();
+                        contours.delete();
+                        hierarchy.delete();
+                    }
+                });
+
+                // Обработчик события для кнопки выделения наибольших контуров
+                findLargestContoursButton.addEventListener('click', function () {
+                    if (srcMat) {
+                        let contoursMat = srcMat.clone();
+                        cv.cvtColor(contoursMat, contoursMat, cv.COLOR_RGBA2GRAY);
+                        cv.Canny(contoursMat, contoursMat, 50, 150, 3);
+
+                        let contours = new cv.MatVector();
+                        let hierarchy = new cv.Mat();
+                        cv.findContours(contoursMat, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+                        // Находим контур с наибольшей площадью
+                        let largestArea = -1;
+                        let largestAreaIndex = -1;
+
+                        // Находим контур с наибольшей длиной
+                        let largestLength = -1;
+                        let largestLengthIndex = -1;
+
+                        for (let i = 0; i < contours.size(); i++) {
+                            let contour = contours.get(i);
+                            let area = cv.contourArea(contour);
+                            let length = cv.arcLength(contour, true);
+
+                            if (area > largestArea) {
+                                largestArea = area;
+                                largestAreaIndex = i;
+                            }
+
+                            if (length > largestLength) {
+                                largestLength = length;
+                                largestLengthIndex = i;
+                            }
+                        }
+
+                        // Создаем новую матрицу для выделения контуров
+                        let largestContoursMat = new cv.Mat.zeros(srcMat.rows, srcMat.cols, cv.CV_8UC3);
+
+                        // Рисуем контур с наибольшей площадью
+                        let colorArea = new cv.Scalar(0, 0, 255, 255); // Красный цвет
+                        cv.drawContours(largestContoursMat, contours, largestAreaIndex, colorArea, 2, cv.LINE_8);
+
+                        // Рисуем контур с наибольшей длиной
+                        let colorLength = new cv.Scalar(255, 0, 0, 255); // Синий цвет
+                        cv.drawContours(largestContoursMat, contours, largestLengthIndex, colorLength, 2, cv.LINE_8);
+                        cv.imshow(outputCanvas, largestContoursMat);
+
+                        // Освободите ресурсы
+                        contoursMat.delete();
+                        contours.delete();
+                        hierarchy.delete();
+                        largestContoursMat.delete();
+                    }
+                });
+
+                // Обработчик события для кнопки подсчета четырехугольных фигур
+                countQuadrilateralsButton.addEventListener('click', function () {
+                    if (srcMat) {
+                        let contoursMat = srcMat.clone();
+                        cv.cvtColor(contoursMat, contoursMat, cv.COLOR_RGBA2GRAY);
+                        cv.Canny(contoursMat, contoursMat, 50, 150, 3);
+
+                        let contours = new cv.MatVector();
+                        let hierarchy = new cv.Mat();
+                        cv.findContours(contoursMat, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+                        // Счетчик четырехугольных фигур
+                        let quadrilateralsCount = 0;
+
+                        for (let i = 0; i < contours.size(); i++) {
+                            let contour = contours.get(i);
+
+                            // Выполняем аппроксимацию контура
+                            let epsilon = 0.02 * cv.arcLength(contour, true);
+                            let approxCurve = new cv.Mat();
+                            cv.approxPolyDP(contour, approxCurve, epsilon, true);
+
+                            // Если контур аппроксимируется четырьмя вершинами, это четырехугольная фигура
+                            if (approxCurve.rows === 4) {
+                                quadrilateralsCount++;
+                            }
+
+                            // Освобождаем ресурсы
+                            approxCurve.delete();
+                        }
+
+                        // Вывод количества четырехугольных фигур
+                        quadrilateralsCountElement.textContent = "Количество четырехугольных фигур: " + quadrilateralsCount;
+
+                        // Освободите ресурсы
+                        contoursMat.delete();
+                        contours.delete();
+                        hierarchy.delete();
+                    }
+                });
+
+                // Обработчик события для кнопки обнаружения окружностей
+                circlesButton.addEventListener('click', function () {
+                    if (srcMat) {
+                        // Создаем копию матрицы srcMat для обработки
+                        let circlesMat = new cv.Mat();
+
+                        // Преобразование изображения в оттенки серого
+                        cv.cvtColor(srcMat, srcMat, cv.COLOR_RGBA2GRAY);
+
+                        // Обнаружение окружностей с использованием HoughCircles
+                        cv.HoughCircles(srcMat, circlesMat, cv.HOUGH_GRADIENT, 1, 45, 75, 40, 0, 0);
+
+                        // Вывод количества найденных окружностей
+                        circlesCountElement.textContent = "Количество окружностей: " + circlesMat.cols;
+
+                        // Отрисовка окружностей на изображении
+                        let displayMat = srcMat.clone();
+                        for (let i = 0; i < circlesMat.cols; ++i) {
+                            let x = circlesMat.data32F[i*3];
+                            let y = circlesMat.data32F[i*3 + 1];
+                            let radius  = circlesMat.data32F[i*3 + 2];
+                            let center = new cv.Point(x, y);
+                            cv.circle(srcMat, center, radius, [255, 255, 255, 255], 3);
+                        }
+                        cv.imshow(outputCanvas, srcMat);
+
+                        // Освобождаем ресурсы
+                        circlesMat.delete();
+                        displayMat.delete();
+                    }
+                });
+                 // Обработчик события для кнопки поиска линий
+                detectLinesButton.addEventListener('click', function () {
+                    if (srcMat) {
+                        // Создание копии матрицы srcMat для обработки
+                        let linesMat = srcMat.clone();
+                        // Преобразование изображения в оттенки серого
+                        cv.cvtColor(linesMat, linesMat, cv.COLOR_RGBA2GRAY);
+                        // Применение алгоритма Canny для выделения граней
+                        cv.Canny(linesMat, linesMat, 50, 150, 3);
+                        // Обнаружение линий с помощью cv2.HoughLinesP() для более точного нахождения линий
+                        let detectedLines = new cv.Mat();
+                        //rho - радиус окружности, в которой находится линия.
+                        //theta - угол наклона линии.
+                        //votes - количество точек, которые принадлежат линии.
+                        cv.HoughLinesP(linesMat, detectedLines, 0.5, Math.PI / 80, 15, 5, 10);
+                        // Отображение линий
+                        for (let i = 0; i < detectedLines.rows; i++) {
+                            let line = detectedLines.data32S.subarray(i * 4, i * 4 + 4);
+                            let startPoint = new cv.Point(line[0], line[1]);
+                            let endPoint = new cv.Point(line[2], line[3]);
+                            cv.line(srcMat, startPoint, endPoint, [0, 0, 255, 255], 2);
+                        }
+                        // Вывод количества обнаруженных линий
+                        linesCountElement.textContent = "Количество линий: " + detectedLines.rows;
+                        cv.imshow(outputCanvas, srcMat);
+                        // Освободите ресурсы
+                        linesMat.delete();
+                        detectedLines.delete();
+                    }
+                });
+            };
+        }
+    </script>
+</body>
+</html>
