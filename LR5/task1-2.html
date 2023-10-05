@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script async src="https://docs.opencv.org/master/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
+</head>
+<body>
+    <!-- кнопка детекции углов -->
+    <button id="detectCornersButton">Детектировать угловые точки</button>
+    
+    <!-- кнопка детекции углов с использованием детектора Ши-Томаси -->
+    <button id="detectShiTomasiCornersButton">Детектировать угловые точки (Shi-Tomasi)</button><br><br>
+    
+    <!-- загрузка изображения -->
+    <input type="file" id="fileInput" accept="image/*"><br><br>
+
+    <!-- отображение исходного изображения и результата обработки -->
+    <img id="inputImage" style="max-width: 500px;">
+    <canvas id="outputCanvas" style="max-width: 500px;"></canvas>
+
+    <script>
+        let srcMat, dstMat;
+        let inputImageElement = document.getElementById('inputImage');
+        let outputCanvas = document.getElementById('outputCanvas');
+        let detectCornersButton = document.getElementById('detectCornersButton');
+        let detectShiTomasiCornersButton = document.getElementById('detectShiTomasiCornersButton');
+        let rotateImageButton = document.getElementById('rotateImageButton');
+        
+        function onOpenCvReady() {
+            // Вызов функции по готовности библиотеки
+            cv.onRuntimeInitialized = function() {
+                // Добавление обработчика события выбора файла
+                document.getElementById('fileInput').addEventListener('change', function (e) {
+                    const file = e.target.files[0];
+                    const reader = new FileReader();
+
+                    reader.onload = function () {
+                        const img = new Image();
+                        img.onload = function () {
+                            // Отображение выбранного изображения
+                            inputImageElement.src = img.src;
+                            // Создание матрицы изображения для обработки
+                            srcMat = cv.imread(inputImageElement);
+                            dstMat = new cv.Mat();
+                        };
+                        img.src = reader.result;
+                    };
+                    reader.readAsDataURL(file);
+                });
+
+                // Обработчик события для кнопки детекции углов
+                // Определяет угловые точки, основываясь на изменении яркости изображения в различных направлениях.
+                // Детектор углов Харриса идентифицирует угловые точки, анализируя изменения интенсивности пикселей в различных направлениях. Основной принцип заключается в том, что угловые точки будут иметь большие изменения интенсивности при сдвиге окна в любом направлении. Алгоритм вычисляет матрицу углового автокорреляционного тензора для каждого пикселя и использует его для определения угловых точек.
+                detectCornersButton.addEventListener('click', function () {
+                    if (srcMat) {
+                        // Создание копии изображения
+                        let inputMat = srcMat.clone();
+
+                        // Преобразование изображения в оттенки серого
+                        cv.cvtColor(inputMat, inputMat, cv.COLOR_RGBA2GRAY);
+
+                        // Детекция углов с использованием детектора Харриса
+                        let corners = new cv.Mat();
+                        let blockSize = 5;
+                        let apertureSize = 3;
+                        let k = 0.07;
+                        
+                        cv.cornerHarris(inputMat, corners, blockSize, apertureSize, k);
+
+                        // Нормализация угловых точек
+                        let dstCorners = new cv.Mat();
+                        cv.normalize(corners, dstCorners, 0, 255, cv.NORM_MINMAX, cv.CV_8U);
+
+                        // Отображение угловых точек на изображении
+                        for (let i = 0; i < dstCorners.rows; i++) {
+                            for (let j = 0; j < dstCorners.cols; j++) {
+                                let response = dstCorners.data[i * dstCorners.cols + j];
+                                if (response > 150) {  // Подберите подходящий порог
+                                    srcMat.data[(i * dstCorners.cols + j) * 4] = 255;   // Изменяем красный канал
+                                    srcMat.data[(i * dstCorners.cols + j) * 4 + 1] = 0; // Изменяем зеленый канал
+                                    srcMat.data[(i * dstCorners.cols + j) * 4 + 2] = 0; // Изменяем синий канал
+                                }
+                            }
+                        }
+
+                        cv.imshow(outputCanvas, srcMat);
+
+                        // Освобождение ресурсов
+                        corners.delete();
+                        dstCorners.delete();
+                        inputMat.delete();
+                    }
+                });
+
+                // Обработчик события для кнопки детекции углов с использованием детектора Ши-Томаси
+                // алгоритм напрямую вычисляет значение аффинных преобразований, поскольку делается предположение, что поиск углов будет более стабильным.
+                detectShiTomasiCornersButton.addEventListener('click', function () {
+                    if (srcMat) {
+                        // Создаем копию изображения
+                        let inputMat = srcMat.clone();
+
+                        // Преобразование изображения в оттенки серого
+                        cv.cvtColor(inputMat, inputMat, cv.COLOR_RGBA2GRAY);
+
+                        // Параметры детектора Ши-Томаси
+                        let maxCorners = 100; // Максимальное количество угловых точек
+                        let qualityLevel = 0.17; // Качество угловых точек (0.01 = 1% лучших точек)
+                        let minDistance = 10; // Минимальное расстояние между точками
+
+                        let corners = new cv.Mat();
+
+                        // Применяем детектор Ши-Томаси
+                        cv.goodFeaturesToTrack(inputMat, corners, maxCorners, qualityLevel, minDistance);
+
+                        // Отображение угловых точек на изображении
+                        let color = new cv.Scalar(0, 255, 0, 255); // Красный цвет
+                        for (let i = 0; i < corners.rows; i++) {
+                            let x = corners.data32F[i * 2];
+                            let y = corners.data32F[i * 2 + 1];
+                            cv.circle(srcMat, new cv.Point(x, y), 3, color, -1);
+                        }
+
+                        cv.imshow(outputCanvas, srcMat);
+
+                        // Освобождение ресурсов
+                        corners.delete();
+                        inputMat.delete();
+                    }
+                });
+            };
+        }
+    </script>
+</body>
+</html>
